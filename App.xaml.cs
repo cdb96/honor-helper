@@ -104,7 +104,9 @@ public partial class App : Application
             if (h != IntPtr.Zero)
                 return h;
         }
-        return LoadIcon(IntPtr.Zero, new IntPtr(32512)); // IDI_APPLICATION
+        // LoadIcon returns a shared handle that callers must not destroy. Copy it so TrayIcon
+        // always owns its handle and can release it deterministically.
+        return CopyIcon(LoadIcon(IntPtr.Zero, new IntPtr(32512))); // IDI_APPLICATION
     }
 
     private void ToggleWindow()
@@ -169,6 +171,8 @@ public partial class App : Application
         _exitRequested = true;
         _tray?.Dispose();
         _tray = null;
+        if (_window is MainWindow mainWindow)
+            mainWindow.Shutdown();
         _window?.Close();
     }
 
@@ -179,7 +183,16 @@ public partial class App : Application
         {
             args.Handled = true;
             _window.AppWindow.Hide();
+            return;
         }
+
+        if (_window is not null)
+            _window.Closed -= OnWindowClosed;
+        _window = null;
+
+        _instanceMutex?.ReleaseMutex();
+        _instanceMutex?.Dispose();
+        _instanceMutex = null;
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
@@ -203,6 +216,9 @@ public partial class App : Application
 
     [DllImport("user32.dll")]
     private static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CopyIcon(IntPtr hIcon);
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);

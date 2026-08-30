@@ -31,19 +31,13 @@ public static class GpuClockFix
             return null;
         try
         {
-            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = smi,
-                Arguments = "--query-gpu=clocks.current.graphics,utilization.gpu --format=csv,noheader,nounits",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            });
-            var line = p?.StandardOutput.ReadToEnd().Trim();
-            p?.WaitForExit(5000);
+            if (!RunNvidiaSmi(smi,
+                "--query-gpu=clocks.current.graphics,utilization.gpu --format=csv,noheader,nounits",
+                5_000, out var stdout, out _))
+                return null;
+
             // 输出形如 "2100, 65"
-            var parts = line?.Split(',');
+            var parts = stdout.Trim().Split(',');
             if (parts is { Length: >= 2 } &&
                 int.TryParse(parts[0].Trim(), out var mhz) &&
                 int.TryParse(parts[1].Trim(), out var util))
@@ -98,18 +92,7 @@ public static class GpuClockFix
 
         try
         {
-            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = smi,
-                Arguments = "-rgc",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            });
-            var stdout = p?.StandardOutput.ReadToEnd() ?? "";
-            var stderr = p?.StandardError.ReadToEnd() ?? "";
-            p?.WaitForExit(10_000);
+            RunNvidiaSmi(smi, "-rgc", 10_000, out var stdout, out var stderr);
             var outLine = (stdout + " " + stderr).Trim();
             if (outLine.Length > 0)
                 msg.AppendLine($"-rgc: {outLine}");
@@ -122,6 +105,42 @@ public static class GpuClockFix
         }
 
         return new Result(rc == 0, msg.ToString());
+    }
+
+    private static bool RunNvidiaSmi(string fileName, string arguments, int timeoutMs,
+        out string stdout, out string stderr)
+    {
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        });
+        if (p is null)
+        {
+            stdout = string.Empty;
+            stderr = string.Empty;
+            return false;
+        }
+
+        // Drain both redirected streams concurrently so a full pipe cannot deadlock the child.
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+        var stderrTask = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit(timeoutMs))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            p.WaitForExit();
+            stdout = stdoutTask.GetAwaiter().GetResult();
+            stderr = stderrTask.GetAwaiter().GetResult();
+            return false;
+        }
+
+        stdout = stdoutTask.GetAwaiter().GetResult();
+        stderr = stderrTask.GetAwaiter().GetResult();
+        return p.ExitCode == 0;
     }
 
     private static string? FindNvidiaSmi()
@@ -150,7 +169,11 @@ public static class GpuClockFix
         private static readonly object Gate = new();
         private static bool _failed;
         private static QueryInterfaceDelegate? _qi;
+        private static GetUsagesDelegate? _getUsages;
+        private static GetAllClocksDelegate? _getAllClocks;
         private static IntPtr _gpu = IntPtr.Zero;
+        private static readonly uint[] UsageEntries = new uint[33];
+        private static readonly uint[] ClockEntries = new uint[64];
 
         [DllImport("kernel32.dll", CharSet = CharSet.Ansi, SetLastError = true)]
         private static extern IntPtr LoadLibrary(string lpFileName);
@@ -204,26 +227,26 @@ public static class GpuClockFix
                     if (_qi is null && !Init())
                         return null;
 
-                    var getUsages = Qi<GetUsagesDelegate>(0x189A1FDF);       // NvAPI_GPU_GetUsages
-                    var getAllClocks = Qi<GetAllClocksDelegate>(0x1BD69F49); // NvAPI_GPU_GetAllClocks
-                    if (getUsages is null || getAllClocks is null)
+                    if (_getUsages is null || _getAllClocks is null)
                     {
                         _failed = true;
                         return null;
                     }
 
+                    Array.Clear(UsageEntries);
+                    Array.Clear(ClockEntries);
                     var usages = new NvUsages
                     {
                         Version = (uint)Marshal.SizeOf<NvUsages>() | (1u << 16),
-                        Entries = new uint[33],
+                        Entries = UsageEntries,
                     };
                     var clocks = new NvClocks
                     {
                         Version = (uint)Marshal.SizeOf<NvClocks>() | (1u << 16),
-                        Clocks = new uint[64],
+                        Clocks = ClockEntries,
                     };
 
-                    if (getUsages(_gpu, ref usages) != 0 || getAllClocks(_gpu, ref clocks) != 0)
+                    if (_getUsages(_gpu, ref usages) != 0 || _getAllClocks(_gpu, ref clocks) != 0)
                         return null;
 
                     int util = usages.Entries.Length > 2 ? (int)usages.Entries[2] : 0;
@@ -260,6 +283,13 @@ public static class GpuClockFix
             { _failed = true; return false; }
 
             _gpu = gpus[0];   // 本机单 GPU，取第一块物理 GPU
+            _getUsages = Qi<GetUsagesDelegate>(0x189A1FDF);
+            _getAllClocks = Qi<GetAllClocksDelegate>(0x1BD69F49);
+            if (_getUsages is null || _getAllClocks is null)
+            {
+                _failed = true;
+                return false;
+            }
             return true;
         }
     }

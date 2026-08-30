@@ -33,6 +33,7 @@ public sealed class PpmController : IDisposable
 
     private readonly object _wmiLock = new();
     private WmiConnection? _conn;
+    private WmiConnection? _cimv2;
     private string? _instancePath;
 
     private WmiConnection Connection
@@ -284,32 +285,35 @@ public sealed class PpmController : IDisposable
     /// 当前 CPU 平均频率（MHz）= 基准频率 × 性能百分比
     /// （「Processor Information」性能计数器，无需管理员）。
     /// 该计数器在 root\cimv2 命名空间，与 HONOR 接口的 \\.\ROOT\WMI 不同，
-    /// 所以这里新建一个独立的 cimv2 连接（WmiLight）。
+    /// 所以这里复用一个独立的 cimv2 连接（WmiLight），避免每次轮询重建 COM 会话。
     /// </summary>
     public Task<int?> GetCpuFreqMhzAsync()
         => Task.Run(() =>
         {
             try
             {
-                using var cimv2 = new WmiConnection(@"\\.\ROOT\cimv2");
-                foreach (var o in cimv2.CreateQuery(
-                    "SELECT PercentProcessorPerformance, ProcessorFrequency " +
-                    "FROM Win32_PerfFormattedData_Counters_ProcessorInformation WHERE Name='_Total'"))
+                lock (_wmiLock)
                 {
-                    try
+                    _cimv2 ??= new WmiConnection(@"\\.\ROOT\cimv2");
+                    foreach (var o in _cimv2.CreateQuery(
+                        "SELECT PercentProcessorPerformance, ProcessorFrequency " +
+                        "FROM Win32_PerfFormattedData_Counters_ProcessorInformation WHERE Name='_Total'"))
                     {
-                        // 用 Convert.ToDouble 兼容 UInt64/UInt32 等不同数值类型。
-                        var perf = Convert.ToDouble(o.GetPropertyValue("PercentProcessorPerformance"));
-                        var baseMhz = Convert.ToDouble(o.GetPropertyValue("ProcessorFrequency"));
-                        if (baseMhz > 0)
-                            return (int?)Math.Round(baseMhz * perf / 100.0);
+                        try
+                        {
+                            // 用 Convert.ToDouble 兼容 UInt64/UInt32 等不同数值类型。
+                            var perf = Convert.ToDouble(o.GetPropertyValue("PercentProcessorPerformance"));
+                            var baseMhz = Convert.ToDouble(o.GetPropertyValue("ProcessorFrequency"));
+                            if (baseMhz > 0)
+                                return (int?)Math.Round(baseMhz * perf / 100.0);
+                        }
+                        finally
+                        {
+                            o.Dispose();
+                        }
                     }
-                    finally
-                    {
-                        o.Dispose();
-                    }
+                    return null;
                 }
-                return null;
             }
             catch
             {
@@ -398,6 +402,8 @@ public sealed class PpmController : IDisposable
         lock (_wmiLock)
         {
             ResetConnection();
+            _cimv2?.Dispose();
+            _cimv2 = null;
         }
     }
 }

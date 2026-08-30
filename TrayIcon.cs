@@ -36,6 +36,9 @@ public sealed class TrayIcon : IDisposable
     private bool _added;
     private readonly Guid _guid = Guid.NewGuid();
     private readonly WndProcDelegate _wndProcDelegate;
+    private readonly string _windowClassName;
+    private readonly IntPtr _moduleHandle;
+    private bool _disposed;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -45,7 +48,8 @@ public sealed class TrayIcon : IDisposable
 
     public TrayIcon(IntPtr iconHandle, string tooltip)
     {
-        var cls = "HonorHelperTray_" + _guid.ToString("N");
+        _windowClassName = "HonorHelperTray_" + _guid.ToString("N");
+        _moduleHandle = GetModuleHandle(null);
         _wmTray = RegisterWindowMessage("HonorHelperTrayMsg_" + _guid.ToString("N"));
         _activateMsg = RegisterWindowMessage(ActivateMsgName);
 
@@ -55,12 +59,12 @@ public sealed class TrayIcon : IDisposable
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
             lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
-            lpszClassName = cls,
-            hInstance = GetModuleHandle(null),
+            lpszClassName = _windowClassName,
+            hInstance = _moduleHandle,
         };
         RegisterClassEx(ref wc);
 
-        _hwnd = CreateWindowEx(0, cls, "", 0, 0, 0, 0, 0,
+        _hwnd = CreateWindowEx(0, _windowClassName, "", 0, 0, 0, 0, 0,
             IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
 
         _iconHandle = iconHandle;
@@ -108,19 +112,25 @@ public sealed class TrayIcon : IDisposable
         if (menu == IntPtr.Zero)
             return null;
 
-        for (int i = 0; i < items.Length; i++)
-            AppendMenu(menu, 0x00000000, (UIntPtr)items[i].Id, items[i].Text); // MF_STRING
+        try
+        {
+            for (int i = 0; i < items.Length; i++)
+                AppendMenu(menu, 0x00000000, (UIntPtr)items[i].Id, items[i].Text); // MF_STRING
 
-        SetForegroundWindow(_hwnd);
-        // TPM_RETURNCMD | TPM_RIGHTBUTTON -> returns the chosen id synchronously
-        int chosen = TrackPopupMenuRet(menu, 0x0100 | 0x0002, screenX, screenY, 0, _hwnd, IntPtr.Zero);
-        DestroyMenu(menu);
+            SetForegroundWindow(_hwnd);
+            // TPM_RETURNCMD | TPM_RIGHTBUTTON -> returns the chosen id synchronously
+            int chosen = TrackPopupMenuRet(menu, 0x0100 | 0x0002, screenX, screenY, 0, _hwnd, IntPtr.Zero);
 
-        // swallow the WM_COMMAND that TrackPopupMenu posts for the selection
-        var msg = new MSG();
-        while (PeekMessage(out msg, _hwnd, 0x0000, 0x0000, 0x0001)) { }
+            // swallow the WM_COMMAND that TrackPopupMenu posts for the selection
+            var msg = new MSG();
+            while (PeekMessage(out msg, _hwnd, 0x0000, 0x0000, 0x0001)) { }
 
-        return chosen == 0 ? null : chosen;
+            return chosen == 0 ? null : chosen;
+        }
+        finally
+        {
+            DestroyMenu(menu);
+        }
     }
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -142,6 +152,14 @@ public sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        LeftClick = null;
+        RightClick = null;
+        ActivateRequested = null;
+
         if (_added && _hwnd != IntPtr.Zero)
         {
             var d = BuildNotifyData(Nif.Message);
@@ -153,6 +171,13 @@ public sealed class TrayIcon : IDisposable
             DestroyWindow(_hwnd);
             _hwnd = IntPtr.Zero;
         }
+
+        if (_iconHandle != IntPtr.Zero)
+        {
+            DestroyIcon(_iconHandle);
+        }
+
+        UnregisterClass(_windowClassName, _moduleHandle);
     }
 
     /// <summary>
@@ -210,6 +235,12 @@ public sealed class TrayIcon : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool DestroyWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool UnregisterClass(string className, IntPtr hInstance);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? name);

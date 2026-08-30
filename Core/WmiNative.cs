@@ -150,8 +150,10 @@ internal static class WmiNative
     /// <summary>Invoke OemWMIfun on the HONOR instance. Returns the raw u8Output bytes.</summary>
     public static byte[] Invoke(WmiConnection conn, string instancePath, byte[] command)
     {
-        // Build the in-parameters object from the class method signature (public WmiLight API).
-        using var method = conn.GetMethod("OemWMIMethod", "OemWMIfun");
+        // GetMethod() internally creates a WmiClass. Keep the class alive while obtaining
+        // the method, then dispose it deterministically; WmiMethod does not own that class.
+        using var cls = conn.GetClass("OemWMIMethod");
+        using var method = cls.GetMethod("OemWMIfun");
         using var inParams = method.CreateInParameters();
 
         // u8Input is a fixed 64-byte buffer; the CIM layer rejects shorter input.

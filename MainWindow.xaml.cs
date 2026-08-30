@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Windowing;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HonorHelper;
@@ -38,6 +39,7 @@ public sealed partial class MainWindow : Window
     private bool _procScanPending;
     private bool _touchpadSync;
     private bool _touchpadBusy;
+    private bool _disposed;
     private string? _modeStatusText;
     private readonly DispatcherTimer _statusRevertTimer = new();
 
@@ -536,17 +538,33 @@ public sealed partial class MainWindow : Window
         try
         {
             var now = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            System.Diagnostics.Process[]? processes = null;
             try
             {
-                foreach (var p in System.Diagnostics.Process.GetProcesses())
+                processes = System.Diagnostics.Process.GetProcesses();
+                foreach (var p in processes)
                 {
-                    now.Add(p.ProcessName);
-                    p.Dispose();
+                    try
+                    {
+                        now.Add(p.ProcessName);
+                    }
+                    catch
+                    {
+                        // A process may exit or become inaccessible between enumeration and lookup.
+                    }
                 }
             }
             catch
             {
                 return; // 枚举失败保持现状，下轮再试
+            }
+            finally
+            {
+                if (processes is not null)
+                {
+                    foreach (var p in processes)
+                        p.Dispose();
+                }
             }
 
             foreach (var t in _triggers)
@@ -579,6 +597,7 @@ public sealed partial class MainWindow : Window
     // ---------- 联动 GPU 超频补偿：打开 +45s 后补写一次（覆盖系统晚到的重置），仅此一次 ----------
 
     private readonly Dictionary<string, CancellationTokenSource> _offsetRewrite = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _offsetRewriteLock = new();
 
     private void ScheduleOffsetRewrite(ProgramTrigger t)
     {
@@ -587,12 +606,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var cts = new CancellationTokenSource();
-        _offsetRewrite[t.Path] = cts;
+        lock (_offsetRewriteLock)
+        {
+            if (_disposed)
+            {
+                cts.Dispose();
+                return;
+            }
+            _offsetRewrite[t.Path] = cts;
+        }
         _ = Task.Run(async () =>
         {
             try
             {
                 await Task.Delay(45_000, cts.Token);
+                cts.Token.ThrowIfCancellationRequested();
                 NvPstatesOc.ApplyOffset(NvPstatesOc.ClockGraphics, t.GpuCoreMhz);
                 if (t.GpuMemMhz != 0)
                     NvPstatesOc.ApplyOffset(NvPstatesOc.ClockMemory, t.GpuMemMhz);
@@ -600,18 +628,33 @@ public sealed partial class MainWindow : Window
             catch (OperationCanceledException) { }
             finally
             {
-                CancelOffsetRewrite(t.Path);
+                CompleteOffsetRewrite(t.Path, cts);
             }
         });
     }
 
+    private void CompleteOffsetRewrite(string path, CancellationTokenSource cts)
+    {
+        lock (_offsetRewriteLock)
+        {
+            if (_offsetRewrite.TryGetValue(path, out var current) && ReferenceEquals(current, cts))
+            {
+                _offsetRewrite.Remove(path);
+                cts.Dispose();
+            }
+        }
+    }
+
     private void CancelOffsetRewrite(string path)
     {
-        if (_offsetRewrite.TryGetValue(path, out var cts))
+        lock (_offsetRewriteLock)
         {
-            _offsetRewrite.Remove(path);
-            cts.Cancel();
-            cts.Dispose();
+            if (_offsetRewrite.TryGetValue(path, out var cts))
+            {
+                _offsetRewrite.Remove(path);
+                cts.Cancel();
+                cts.Dispose();
+            }
         }
     }
 
@@ -771,6 +814,39 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ---------- lifetime ----------
+
+    public void Shutdown()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        _ppmDebounce.Stop();
+        _tempTimer.Stop();
+        _procTimer.Stop();
+        _statusRevertTimer.Stop();
+        Root.SizeChanged -= OnRootSizeChanged;
+
+        lock (_offsetRewriteLock)
+        {
+            foreach (var cts in _offsetRewrite.Values)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+            _offsetRewrite.Clear();
+        }
+
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Shutdown();
+            _settingsWindow = null;
+        }
+
+        _controller.Dispose();
+    }
+
     // ---------- event handlers ----------
 
     private void OnModeClick(object sender, RoutedEventArgs e)
@@ -880,9 +956,8 @@ public sealed partial class MainWindow : Window
         if (_settingsWindow is null)
         {
             _settingsWindow = new SettingsWindow(_triggers, _settings, ApplySettings);
-            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
-        _settingsWindow.Activate();
+        _settingsWindow.ShowReusable();
     }
 
     /// <summary>设置窗口保存采样率后的回调：立即套用到轮询定时器。</summary>

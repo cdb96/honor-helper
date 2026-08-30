@@ -2,9 +2,11 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Windowing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace HonorHelper;
@@ -23,10 +25,13 @@ public sealed partial class SettingsWindow : Window
     private readonly Action _onSettingsChanged;
     private readonly DispatcherTimer _saveDebounce = new();
     private bool _loading = true;
+    private bool _disposed;
+    private bool _shutdownRequested;
 
     /// <summary>当前在管理页编辑的规则；null 表示处于列表视图。</summary>
     private ProgramTrigger? _editing;
     private bool _detailLoading;
+    private readonly List<(Border Card, TappedEventHandler Tapped, PointerEventHandler Entered, PointerEventHandler Exited)> _cardHandlers = new();
 
     public SettingsWindow(List<ProgramTrigger> triggers, AppSettings settings, Action onSettingsChanged)
     {
@@ -42,12 +47,7 @@ public sealed partial class SettingsWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(600, 780));
 
         _saveDebounce.Interval = TimeSpan.FromMilliseconds(400);
-        _saveDebounce.Tick += (_, _) =>
-        {
-            _saveDebounce.Stop();
-            SettingsStore.Save(_settings);
-            _onSettingsChanged();
-        };
+        _saveDebounce.Tick += OnSaveDebounceTick;
 
         // 四个动作下拉：打开/退出 × 性能模式/触控板
         FillCombo(OpenCombo, ProgramTriggers.ModeActions);
@@ -61,6 +61,82 @@ public sealed partial class SettingsWindow : Window
         _loading = false;
 
         BuildProgramList();
+        AppWindow.Closing += OnAppWindowClosing;
+        Closed += OnClosed;
+    }
+
+    private void OnSaveDebounceTick(object? sender, object e)
+    {
+        _saveDebounce.Stop();
+        if (!_disposed)
+        {
+            SettingsStore.Save(_settings);
+            _onSettingsChanged();
+        }
+    }
+
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_shutdownRequested)
+            return;
+
+        // Cancel before WinUI starts tearing down the native window/island. Handling Window.Closed
+        // is too late and can make every hide/show cycle allocate another native bridge.
+        args.Cancel = true;
+        ShowWindow(GetWindowHandle(), SW_HIDE);
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        ReleaseResources();
+    }
+
+    public void Shutdown()
+    {
+        if (_disposed)
+            return;
+        _shutdownRequested = true;
+        Close();
+    }
+
+    public void ShowReusable()
+    {
+        if (_disposed)
+            return;
+        ShowWindow(GetWindowHandle(), SW_SHOW);
+        SetForegroundWindow(GetWindowHandle());
+    }
+
+    private IntPtr GetWindowHandle()
+        => WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+    private const int SW_HIDE = 0;
+    private const int SW_SHOW = 5;
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private void ReleaseResources()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        _saveDebounce.Stop();
+        _saveDebounce.Tick -= OnSaveDebounceTick;
+        // Do not lose the last slider change when the window closes inside debounce interval.
+        if (!_loading)
+        {
+            SettingsStore.Save(_settings);
+            _onSettingsChanged();
+        }
+        AppWindow.Closing -= OnAppWindowClosing;
+        Closed -= OnClosed;
+        ClearProgramCards();
+        Content = null;
     }
 
     private static void FillCombo(ComboBox box, (string Id, string Label)[] actions)
@@ -109,9 +185,21 @@ public sealed partial class SettingsWindow : Window
     private void SetStatus(string msg) => SettingsStatusText.Text = msg;
 
     /// <summary>程序联动列表：按 _triggers 重建行（可点击卡片：名称/路径/行为摘要，点击进入管理页）。</summary>
+    private void ClearProgramCards()
+    {
+        foreach (var (card, tapped, entered, exited) in _cardHandlers)
+        {
+            card.Tapped -= tapped;
+            card.PointerEntered -= entered;
+            card.PointerExited -= exited;
+        }
+        _cardHandlers.Clear();
+        ProgramList.Children.Clear();
+    }
+
     private void BuildProgramList()
     {
-        ProgramList.Children.Clear();
+        ClearProgramCards();
 
         if (_triggers.Count == 0)
         {
@@ -180,10 +268,14 @@ public sealed partial class SettingsWindow : Window
                 Padding = new Thickness(10, 6, 10, 6),
                 Child = grid,
             };
-            card.Tapped += (_, _) => ShowDetail(t);
+            TappedEventHandler tapped = (_, _) => ShowDetail(t);
+            PointerEventHandler entered = (_, _) => card.Background = SolidColorBrush("#F1F3F6");
+            PointerEventHandler exited = (_, _) => card.Background = SolidColorBrush("#FFFFFF");
+            card.Tapped += tapped;
             // 悬停变色，提示可点击
-            card.PointerEntered += (_, _) => card.Background = SolidColorBrush("#F1F3F6");
-            card.PointerExited += (_, _) => card.Background = SolidColorBrush("#FFFFFF");
+            card.PointerEntered += entered;
+            card.PointerExited += exited;
+            _cardHandlers.Add((card, tapped, entered, exited));
 
             ProgramList.Children.Add(card);
         }
