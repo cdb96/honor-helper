@@ -22,10 +22,6 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # 先跑一次 Debug，尽早暴露编译错误
-      - name: Build (Debug)
-        run: dotnet build honor-helper.csproj -c Debug -p:Platform=x64
-
       # Release 走 build.ps1：NativeAOT publish + 裁剪未用语言资源
       - name: Publish (NativeAOT Release)
         shell: pwsh
