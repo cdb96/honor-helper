@@ -4,5 +4,8 @@
 支持脱离荣耀系软件切换性能模式，为自定义程序开启时切换性能模式和进行GPU超频。
 
 仅支持荣耀winh7笔记本
+### 界面
+<img width="582" height="811" alt="image" src="https://github.com/user-attachments/assets/b8db23cb-1274-474a-b3bd-3048c4e51383" />
+
 ### 部分功能说明
 GPU锁频修复：修复荣耀电脑管家给特定游戏上pstate和频率锁后忘记在游戏关闭后解锁导致的GPU持续满频问题。（没遇到就不用开）
