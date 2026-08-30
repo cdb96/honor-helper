@@ -11,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # GITHUB_TOKEN 默认只读；往 Release 上传 zip 需要写权限
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
