@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="HonorHelper.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 设置窗口：🧰 通用（触控板 / 自动 GPU 修复）+ ⏱️ 采样率 + 🎯 程序联动
+         （列表视图 / 单程序管理页两个视图切换）。
+         样式挂 Grid.Resources（Window 没有 Resources 属性，旧版 XamlCompiler 会静默崩溃，见 README）。 -->
+    <Grid x:Name="Root" RequestedTheme="Light" Background="#FAFAFA">
+        <Grid.Resources>
+            <Style x:Key="PillButton" TargetType="Button">
+                <Setter Property="Background" Value="White" />
+                <Setter Property="Foreground" Value="#1A1A1A" />
+                <Setter Property="BorderBrush" Value="#D8D8DC" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Height" Value="34" />
+                <Setter Property="Padding" Value="12,2,12,2" />
+                <Setter Property="FontSize" Value="12.5" />
+            </Style>
+
+            <Style x:Key="TickButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Foreground" Value="#70707A" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Height" Value="22" />
+            </Style>
+
+            <Style x:Key="SectionTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="#111114" />
+            </Style>
+
+            <!-- 管理页「打开时/退出时」切换栏的分段按钮 -->
+            <Style x:Key="TabButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Foreground" Value="#70707A" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Padding" Value="14,5,14,5" />
+                <Setter Property="MinHeight" Value="30" />
+            </Style>
+        </Grid.Resources>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="TitleBar" Grid.Row="0" Height="44" Padding="16,0,0,0">
+            <TextBlock Text="设置 — H-Helper" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="16,2,16,16" Spacing="16">
+
+                <!-- ===== 列表视图 ===== -->
+                <StackPanel x:Name="ListPanel" Spacing="16">
+
+                    <!-- 采样率 -->
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <TextBlock Text="⏱️ " FontSize="14" />
+                            <TextBlock Text="采样率" Style="{StaticResource SectionTitle}" />
+                        </StackPanel>
+                        <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                                CornerRadius="8" Padding="12,10,12,12">
+                            <StackPanel Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="温度 / 风扇采样间隔" FontSize="12.5" Foreground="#3A3A40" />
+                                        <TextBlock x:Name="TempPollValueText" Text="5 秒" FontSize="12.5"
+                                                   Foreground="#0F6CBD" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                    </Grid>
+                                    <!-- Value 必须写在 ValueChanged 之前：解析即触发事件（同主窗口 PPM 滑条） -->
+                                    <Slider x:Name="TempPollSlider" Minimum="1" Maximum="60" StepFrequency="1"
+                                            Value="5" ValueChanged="OnTempPollChanged" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="程序联动扫描间隔" FontSize="12.5" Foreground="#3A3A40" />
+                                        <TextBlock x:Name="ProcScanValueText" Text="3 秒" FontSize="12.5"
+                                                   Foreground="#0F6CBD" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                    </Grid>
+                                    <Slider x:Name="ProcScanSlider" Minimum="1" Maximum="30" StepFrequency="1"
+                                            Value="3" ValueChanged="OnProcScanChanged" />
+                                </StackPanel>
+                                <TextBlock FontSize="11" Foreground="#8A8A92" TextWrapping="Wrap"
+                                           Text="间隔越小读数越实时，但 WMI 查询越频繁（建议 ≥2 秒）。改动即时保存并生效。" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- 程序联动 -->
+                    <StackPanel Spacing="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <TextBlock Text="🎯 " FontSize="14" />
+                                <TextBlock Text="程序联动" Style="{StaticResource SectionTitle}" />
+                            </StackPanel>
+                            <Button x:Name="BtnAddProgram" Grid.Column="1" Click="OnAddProgramClick"
+                                    ToolTipService.ToolTip="选择一个 exe：它启动/退出时自动切换到指定性能模式（如游戏启动自动进狂战）"
+                                    Style="{StaticResource PillButton}" Height="28" Padding="10,2,10,2" FontSize="11.5">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="➕" FontSize="11" VerticalAlignment="Center" />
+                                    <TextBlock Text="添加程序" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <!-- 行由代码按 _triggers 生成：点击卡片进入该程序的管理页 -->
+                        <StackPanel x:Name="ProgramList" Spacing="6" />
+                        <TextBlock x:Name="SettingsStatusText" FontSize="11.5" Foreground="#6A6A72"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                </StackPanel>
+
+                <!-- ===== 详情视图：单个程序的管理页 ===== -->
+                <StackPanel x:Name="DetailPanel" Spacing="12" Visibility="Collapsed">
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="BtnBack" Grid.Column="0" Click="OnBackClick" VerticalAlignment="Center"
+                                Style="{StaticResource PillButton}" Height="30" Padding="10,2,10,2" FontSize="11.5">
+                            <TextBlock Text="‹ 返回列表" />
+                        </Button>
+                        <TextBlock x:Name="DetailTitleText" Grid.Column="1" Style="{StaticResource SectionTitle}"
+                                   VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+
+                    <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                            CornerRadius="8" Padding="12,10,12,12">
+                        <StackPanel Spacing="6">
+                            <TextBlock x:Name="DetailPathText" FontSize="11" Foreground="#9A9AA2" TextWrapping="Wrap" />
+                            <ToggleSwitch x:Name="EnabledToggle" Header="启用联动" Margin="0,4,0,0"
+                                          Toggled="OnEnabledToggled" />
+                            <TextBlock FontSize="11" Foreground="#8A8A92" TextWrapping="Wrap"
+                                       Text="停用后该程序的启动/退出不会触发任何动作，规则保留。" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 打开时：程序启动时的动作 -->
+                    <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                            CornerRadius="8" Padding="12,10,12,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="打开时（检测到程序启动）" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="#3A3A40" />
+                            <Grid>
+                                <TextBlock Text="性能模式" FontSize="12" Foreground="#8A8A92"
+                                           VerticalAlignment="Center" />
+                                <ComboBox x:Name="OpenCombo" MinWidth="150" FontSize="12.5"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          SelectionChanged="OnOpenComboChanged" />
+                            </Grid>
+                            <!-- 仅当性能模式选「狂战」时显示（PPM 只在狂战模式下可写） -->
+                            <StackPanel x:Name="OpenPpmPanel" Spacing="2" Visibility="Collapsed">
+                                <Grid>
+                                    <TextBlock Text="PPM 功率级别" FontSize="12" Foreground="#8A8A92"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock x:Name="OpenPpmValueText" Text="2 · Level 2" FontSize="11"
+                                               Foreground="#0F6CBD" FontWeight="SemiBold"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                                <Slider x:Name="OpenPpmSlider" Minimum="0" Maximum="4" StepFrequency="1"
+                                        Value="2" ValueChanged="OnOpenPpmChanged" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <Grid>
+                                    <TextBlock Text="GPU 核心超频" FontSize="12" Foreground="#8A8A92"
+                                               VerticalAlignment="Center" />
+                                    <TextBox x:Name="CoreOffsetBox" Text="0" MinWidth="72" Height="28" FontSize="12"
+                                             TextAlignment="Center" HorizontalAlignment="Right"
+                                             TextChanged="OnCoreBoxTextChanged" LostFocus="OnCoreBoxLostFocus" />
+                                </Grid>
+                                <Slider x:Name="CoreOffsetSlider" Minimum="-200" Maximum="400" StepFrequency="5"
+                                        Value="0" ValueChanged="OnCoreOffsetChanged" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <Grid>
+                                    <TextBlock Text="GPU 显存超频" FontSize="12" Foreground="#8A8A92"
+                                               VerticalAlignment="Center" />
+                                    <TextBox x:Name="MemOffsetBox" Text="0" MinWidth="72" Height="28" FontSize="12"
+                                             TextAlignment="Center" HorizontalAlignment="Right"
+                                             TextChanged="OnMemBoxTextChanged" LostFocus="OnMemBoxLostFocus" />
+                                </Grid>
+                                <Slider x:Name="MemOffsetSlider" Minimum="-200" Maximum="1000" StepFrequency="5"
+                                        Value="0" ValueChanged="OnMemOffsetChanged" />
+                            </StackPanel>
+                            <Grid>
+                                <TextBlock Text="触控板" FontSize="12" Foreground="#8A8A92"
+                                           VerticalAlignment="Center" />
+                                <ComboBox x:Name="OpenTpCombo" MinWidth="150" FontSize="12.5"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          SelectionChanged="OnOpenTpChanged" />
+                            </Grid>
+                            <TextBlock FontSize="11" Foreground="#8A8A92" TextWrapping="Wrap"
+                                       Text="检测到该程序启动时：先切换性能模式，再执行触控板动作。" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 退出时：程序退出时的动作 + 可选自动 GPU 修复 -->
+                    <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                            CornerRadius="8" Padding="12,10,12,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="退出时（检测到程序退出）" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="#3A3A40" />
+                            <Grid>
+                                <TextBlock Text="性能模式" FontSize="12" Foreground="#8A8A92"
+                                           VerticalAlignment="Center" />
+                                <ComboBox x:Name="CloseCombo" MinWidth="150" FontSize="12.5"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          SelectionChanged="OnCloseComboChanged" />
+                            </Grid>
+                            <Grid>
+                                <TextBlock Text="触控板" FontSize="12" Foreground="#8A8A92"
+                                           VerticalAlignment="Center" />
+                                <ComboBox x:Name="CloseTpCombo" MinWidth="150" FontSize="12.5"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          SelectionChanged="OnCloseTpChanged" />
+                            </Grid>
+                            <Grid>
+                                <TextBlock Text="自动 GPU 锁频修复" FontSize="12" Foreground="#8A8A92"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch x:Name="GpuFixToggle" OnContent="开" OffContent="关" MinWidth="0"
+                                              HorizontalAlignment="Right" Toggled="OnGpuFixExitToggled" />
+                            </Grid>
+                            <TextBlock FontSize="11" Foreground="#8A8A92" TextWrapping="Wrap"
+                                       Text="开启后：该程序退出并执行所选动作后，自动进行一次 GPU 锁频修复（恢复被游戏场景钉住的频率）。仅对该程序生效。" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Click="OnDeleteClick" Style="{StaticResource TickButton}"
+                                Foreground="#C42B1C" Content="🗑 删除该规则" />
+                    </StackPanel>
+
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

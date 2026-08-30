@@ -1,0 +1,19 @@
+# Normalize line endings: store LF in the repo, let git decide on checkout.
+* text=auto
+
+# PowerShell scripts are safest with CRLF on Windows.
+*.ps1 text eol=crlf
+
+# Windows-specific sources: keep CRLF so old tooling (XamlCompiler) stays happy.
+*.cs text eol=crlf
+*.xaml text eol=crlf
+*.csproj text eol=crlf
+*.manifest text eol=crlf
+*.sln text eol=crlf
+
+# Binaries
+*.ico binary
+*.png binary
+*.jpg binary
+*.exe binary
+*.dll binary

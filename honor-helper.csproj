@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>HonorHelper</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AppxPackage>false</AppxPackage>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- NativeAOT：自包含 + AOT 编译。WinUI 3 + Windows App SDK 1.6 支持 PublishAot
+       （需 CsWinRT 2.1.1+，见下）。AOT 隐含 PublishTrimmed。 -->
+  <PropertyGroup>
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 本地化资源精简：AOT 下 InvariantGlobalization 更小，但本程序用到日期/数字格式，
+         保留全球化；仅去掉未使用语言的卫星资源。 -->
+    <SatelliteResourceLanguages>zh-CN;zh-Hans;en-US</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinUI 3 / Windows App SDK -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.3916" />
+    <!-- CsWinRT 2.1.1+ 提供 WinRT 源生成器，是 WinUI 3 在 NativeAOT 下所需。 -->
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.1.1" />
+    <!-- WmiLight：AOT 兼容的 WMI 轻量库，替代不支持 AOT 的 System.Management。 -->
+    <PackageReference Include="WmiLight" Version="7.2.0" />
+  </ItemGroup>
+
+  <!-- NativeAOT 下防止裁剪 WmiLight 的关键代码（README 推荐）。 -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="WmiLight" />
+  </ItemGroup>
+
+  <!-- 体积精简（仅 Release）：保留中文/英文语言资源，不生成 PDB -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SatelliteResourceLanguages>zh-CN;zh-Hans;en-US</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+</Project>
