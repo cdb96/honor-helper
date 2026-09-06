@@ -38,7 +38,9 @@ if (-not $vsDir) { throw "Visual Studio C++ build tools not found." }
 # ---- locate Windows SDK ----
 $sdkDir = $null
 $sdkVer = $null
-foreach ($r in @('E:\Windows Kits\10', "$env:ProgramFiles(x86)\Windows Kits\10")) {
+# NOTE: env var MUST use ${...} braces: "$env:ProgramFiles(x86)" parses as
+# the scalar "$env:ProgramFiles" followed by literal "(x86)".
+foreach ($r in @('E:\Windows Kits\10', "${env:ProgramFiles(x86)}\Windows Kits\10")) {
     # NOTE: same non-existent-drive guard as above (E: is local-only).
     if (-not (Test-Path $r)) { continue }
     if (Test-Path (Join-Path $r 'Include')) {
