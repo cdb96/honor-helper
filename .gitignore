@@ -29,7 +29,17 @@ Generated Files/
 *.ilk
 *.binlog
 
+# Native core + C++ service build output
+core/build/
+service/build/
+
+# Packaged distributables
+dist/
+
 # OS junk
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Local tooling state (plugin status files, not part of the project)
+thinking-effort-loaded.json

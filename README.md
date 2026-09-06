@@ -4,6 +4,9 @@
 支持脱离荣耀系软件切换性能模式，为自定义程序开启时切换性能模式和进行GPU超频。
 
 仅支持荣耀winh7笔记本
+
+详见[架构说明](docs/architecture.md)。
+
 ### 界面
 <img width="582" height="811" alt="image" src="https://github.com/user-attachments/assets/b8db23cb-1274-474a-b3bd-3048c4e51383" />
 
