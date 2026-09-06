@@ -28,7 +28,9 @@ if (Test-Path $vswhere) {
 }
 if (-not $vsDir) {
     foreach ($cand in @('E:\vs\visual studio', "$env:ProgramFiles\Microsoft Visual Studio\2022\Community")) {
-        if (Test-Path (Join-Path $cand 'VC\Auxiliary\Build\vcvars64.bat')) { $vsDir = $cand; break }
+        # NOTE: Join-Path throws on a non-existent drive (e.g. E: on CI
+        # runners), so guard with a plain Test-Path first.
+        if ((Test-Path $cand) -and (Test-Path (Join-Path $cand 'VC\Auxiliary\Build\vcvars64.bat'))) { $vsDir = $cand; break }
     }
 }
 if (-not $vsDir) { throw "Visual Studio C++ build tools not found." }
@@ -37,6 +39,8 @@ if (-not $vsDir) { throw "Visual Studio C++ build tools not found." }
 $sdkDir = $null
 $sdkVer = $null
 foreach ($r in @('E:\Windows Kits\10', "$env:ProgramFiles(x86)\Windows Kits\10")) {
+    # NOTE: same non-existent-drive guard as above (E: is local-only).
+    if (-not (Test-Path $r)) { continue }
     if (Test-Path (Join-Path $r 'Include')) {
         $sdkDir = $r
         $sdkVer = Get-ChildItem (Join-Path $r 'Include') -Directory | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
