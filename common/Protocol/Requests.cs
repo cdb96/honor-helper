@@ -18,4 +18,5 @@ public enum RequestType
     SaveTriggers = 12,
     RunTriggerAction = 13,
     Ping = 14,
+    SetChargeThreshold = 15,
 }

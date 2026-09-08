@@ -68,6 +68,13 @@ public sealed class ServiceClient
                ?? new SimpleResult(false, "服务无响应");
     }
 
+    public async Task<SimpleResult> SetChargeThresholdAsync(int lower, int upper)
+    {
+        var dto = new ChargeThresholdDto(lower, upper);
+        return (await SendAsync(RequestType.SetChargeThreshold, dto).ConfigureAwait(false) as SimpleResult)
+               ?? new SimpleResult(false, "服务无响应");
+    }
+
     public async Task<Protocol.GpuFixResult?> RunGpuFixAsync(bool skipClockReset)
     {
         var payload = new[] { (byte)(skipClockReset ? 1 : 0) };
@@ -155,6 +162,7 @@ public sealed class ServiceClient
             RequestType.ApplyProfile or RequestType.SetPpm or RequestType.SetTouchpad
                 or RequestType.SetPerfMode or RequestType.ApplyOcOffset
                 or RequestType.SetSettings or RequestType.SaveTriggers or RequestType.Ping
+                or RequestType.SetChargeThreshold
                 => PipeProtocol.Deserialize<SimpleResult>(payload),
             RequestType.RunGpuFix => PipeProtocol.Deserialize<Protocol.GpuFixResult>(payload),
             RequestType.GetOcInfo => PipeProtocol.Deserialize<OcInfo>(payload),

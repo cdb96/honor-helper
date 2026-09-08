@@ -15,6 +15,7 @@ namespace HonorHelper.Protocol;
 [JsonSerializable(typeof(TriggerEditDto))]
 [JsonSerializable(typeof(ApplyProfileDto))]
 [JsonSerializable(typeof(OcOffsetDto))]
+[JsonSerializable(typeof(ChargeThresholdDto))]
 [JsonSerializable(typeof(SimpleResult))]
 [JsonSerializable(typeof(ModeResult))]
 [JsonSerializable(typeof(GpuStats))]

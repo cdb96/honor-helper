@@ -253,7 +253,8 @@ std::vector<char> PipeServer::dispatch(int32_t kind, const char* payload, size_t
         raw != (int32_t)RequestType::GetTriggers &&
         raw != (int32_t)RequestType::SaveTriggers &&
         raw != (int32_t)RequestType::RunTriggerAction &&
-        raw != (int32_t)RequestType::Ping) {
+        raw != (int32_t)RequestType::Ping &&
+        raw != (int32_t)RequestType::SetChargeThreshold) {
         return EncodeReply(kind, false,
                            "未知请求", "");
     }
@@ -304,6 +305,32 @@ std::vector<char> PipeServer::dispatch(int32_t kind, const char* payload, size_t
                 return ok(ToWire(SimpleResult{
                     good, good ? "已切换"
                                : "切换失败"}));
+            }
+            case RequestType::SetChargeThreshold: {
+                JsonValue root;
+                if (len == 0 || !ParseJson(payload, len, root, nullptr))
+                    return fail("bad request");
+                int lower = -1;
+                int upper = -1;
+                FromWireChargeThreshold(root, lower, upper);
+                const bool disable = lower == 0 && upper == 0;
+                const bool safeRange = lower >= 40 && lower <= 95 &&
+                                       upper >= 50 && upper <= 100 &&
+                                       upper - lower >= 5;
+                if (!disable && !safeRange) {
+                    return ok(ToWire(SimpleResult{
+                        false, "阈值范围无效：下限 40–95%，上限 50–100%，且至少相差 5%"}));
+                }
+                bool good = HardwareSetChargeThreshold(lower, upper);
+                std::string msg;
+                if (good) {
+                    msg = disable ? "已关闭电池充电保护"
+                                  : "充电保护已设置为 " + std::to_string(lower) +
+                                        "%–" + std::to_string(upper) + "%";
+                } else {
+                    msg = "电池充电阈值设置失败（请确认服务以管理员运行且机型支持）";
+                }
+                return ok(ToWire(SimpleResult{good, std::move(msg)}));
             }
             case RequestType::RunGpuFix: {
                 bool skip = len > 0 && payload[0] != 0;

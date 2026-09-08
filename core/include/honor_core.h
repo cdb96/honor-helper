@@ -55,6 +55,11 @@ HONOR_API int32_t hc_set_perf_mode(int32_t mode);
    PPM is mode-gated (only beast), so a direct failure auto-switches to beast. */
 HONOR_API int32_t hc_set_ppm(int32_t level);
 
+/* Set battery charge protection thresholds. Safe custom ranges are 40..95%
+   for the lower threshold and 50..100% for the upper threshold, with at
+   least a 5-point gap. (0, 0) disables charge protection. */
+HONOR_API int32_t hc_set_charge_threshold(int32_t lower, int32_t upper);
+
 /* Read one temperature channel (°C), or -1 on failure. */
 HONOR_API int32_t hc_get_temp(int32_t channel);
 

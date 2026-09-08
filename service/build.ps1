@@ -81,7 +81,25 @@ try {
 
 # ---- link extras: subsystem WINDOWS + manifest + icon ----
 # Re-link objects with the GUI subsystem and the requireAdministrator manifest.
-$objs = Get-ChildItem $out -Filter *.obj | ForEach-Object { "`"$($_.FullName)`"" }
+$serviceObjectNames = @(
+    'json.obj',
+    'hardware.obj',
+    'stores.obj',
+    'pipe_server.obj',
+    'trigger_engine.obj',
+    'tray.obj',
+    'ui_coordinator.obj',
+    'autostart.obj',
+    'main.obj',
+    'honor_core.obj'
+)
+$objs = foreach ($name in $serviceObjectNames) {
+    $path = Join-Path $out $name
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Missing service object: $path"
+    }
+    "`"$path`""
+}
 $objsLine = $objs -join ' '
 $rcExe = Join-Path $sdkDir "bin\$sdkVer\x64\rc.exe"
 $mtExe = Join-Path $sdkDir "bin\$sdkVer\x64\mt.exe"

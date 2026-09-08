@@ -180,6 +180,7 @@ void TriggerEngine::scanOnce() {
 // by the mode default). The old code waited 600ms, retried once after 400ms.
 void TriggerEngine::RunTrigger(const TriggerStore& store, std::wstring exeBaseLower,
                                bool opening) {
+    bool stateChanged = false;
     std::vector<Trigger> triggers = store.snapshot();
     for (const auto& t : triggers) {
         if (!t.dto.enabled)
@@ -191,17 +192,20 @@ void TriggerEngine::RunTrigger(const TriggerStore& store, std::wstring exeBaseLo
         bool modeOk = false;
         if (ProfileMode(modeId, mode))
             modeOk = HardwareSetPerfMode(mode);
+        stateChanged = stateChanged || modeOk;
         if (opening && modeOk && mode == kBeastPerfMode &&
             t.dto.openPpm >= 0 && t.dto.openPpm <= 4) {
             Sleep(600);
-            if (!HardwareSetPpm(t.dto.openPpm)) {
+            bool ppmOk = HardwareSetPpm(t.dto.openPpm);
+            if (!ppmOk) {
                 Sleep(400);
-                HardwareSetPpm(t.dto.openPpm);
+                ppmOk = HardwareSetPpm(t.dto.openPpm);
             }
+            stateChanged = stateChanged || ppmOk;
         }
         const std::string& tpId = opening ? t.dto.openTouchpad : t.dto.closeTouchpad;
         if (tpId == "tp_on" || tpId == "tp_off")
-            HardwareSetTouchpad(tpId == "tp_on");
+            stateChanged = HardwareSetTouchpad(tpId == "tp_on") || stateChanged;
         if (t.dto.gpuCoreMhz != 0 || t.dto.gpuMemMhz != 0) {
             int core = opening ? t.dto.gpuCoreMhz : 0;
             int mem = opening ? t.dto.gpuMemMhz : 0;
@@ -217,6 +221,11 @@ void TriggerEngine::RunTrigger(const TriggerStore& store, std::wstring exeBaseLo
             GpuFixResult r{};
             HardwareGpuFix(false, r);
         }
+    }
+    if (stateChanged) {
+        static const UINT stateChangedMessage =
+            RegisterWindowMessageW(L"HonorHelperStateChanged");
+        PostMessageW(HWND_BROADCAST, stateChangedMessage, 0, 0);
     }
 }
 

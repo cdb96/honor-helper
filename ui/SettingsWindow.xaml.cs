@@ -159,6 +159,29 @@ public sealed partial class SettingsWindow : Window
         _saveDebounce.Start();
     }
 
+    // ---------- 电池充电保护 ----------
+
+    private async void OnChargePresetClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string preset })
+            return;
+        var values = preset.Split(',');
+        if (values.Length != 2 || !int.TryParse(values[0], out var lower) ||
+            !int.TryParse(values[1], out var upper))
+            return;
+        await ApplyChargeThresholdAsync(lower, upper);
+    }
+
+    private async Task ApplyChargeThresholdAsync(int lower, int upper)
+    {
+        ChargeThresholdStatusText.Visibility = Visibility.Visible;
+        ChargeThresholdStatusText.Text = "正在写入 EC…";
+        ChargeThresholdStatusText.Foreground = SolidColorBrush("#6A6A72");
+        var result = await _client.SetChargeThresholdAsync(lower, upper);
+        ChargeThresholdStatusText.Text = result.Message;
+        ChargeThresholdStatusText.Foreground = SolidColorBrush(result.Ok ? "#107C10" : "#A4262C");
+    }
+
     // ---------- 程序联动：列表视图 ----------
 
     private void SetStatus(string msg) => SettingsStatusText.Text = msg;

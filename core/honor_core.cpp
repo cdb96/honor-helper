@@ -448,6 +448,21 @@ HONOR_API int32_t hc_set_ppm(int32_t level) {
     return 0;
 }
 
+HONOR_API int32_t hc_set_charge_threshold(int32_t lower, int32_t upper) {
+    const bool disable = lower == 0 && upper == 0;
+    const bool safeRange = lower >= 40 && lower <= 95 &&
+                           upper >= 50 && upper <= 100 &&
+                           upper - lower >= 5;
+    if (!disable && !safeRange)
+        return 0;
+
+    std::vector<uint8_t> o;
+    if (!Invoke(std::vector<uint8_t>{
+            0x03, 0x10, (uint8_t)lower, (uint8_t)upper}, o))
+        return 0;
+    return (o.size() >= 1 && o[0] == 0) ? 1 : 0;
+}
+
 HONOR_API int32_t hc_get_temp(int32_t channel) {
     std::vector<uint8_t> o;
     if (!Invoke(std::vector<uint8_t>{

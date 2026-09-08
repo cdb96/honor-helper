@@ -33,8 +33,12 @@ public sealed partial class MainWindow : Window
     private bool _busy;
     private bool _ppmOpen;
     private bool _pollPending;
+    private bool _refreshQueued;
+    private int _ppmWritePending;
     private bool _touchpadSync;
     private bool _touchpadBusy;
+    private bool _refreshRateSync;
+    private bool _refreshRateBusy;
     private bool _disposed;
     private string? _modeStatusText;
     private bool _serviceUp;
@@ -81,6 +85,7 @@ public sealed partial class MainWindow : Window
 
         HighlightModes(null);
         HighlightPpm(-1);
+        LoadRefreshRates();
         _ = RefreshStateAsync();
         _initializing = false;
     }
@@ -253,7 +258,10 @@ public sealed partial class MainWindow : Window
     private async Task RefreshSnapshotAsync()
     {
         if (_pollPending)
+        {
+            _refreshQueued = true;
             return;
+        }
         _pollPending = true;
         try
         {
@@ -289,7 +297,11 @@ public sealed partial class MainWindow : Window
             // PPM mirror: EC has no readback, the service reports the last level
             // it wrote (trigger/slider/profile). Adopt it when the UI disagrees,
             // so a trigger-fired PPM shows up on the slider without a click.
-            if (snap.LastPpm is >= 0 and <= 4 && snap.Mode == PpmModes.BeastPerfMode)
+            // Skip while our own write is in flight: the service hasn't applied
+            // it yet, so LastPpm still holds the OLD value and would yank the
+            // slider back (visible as a snap-back bounce).
+            if (snap.LastPpm is >= 0 and <= 4 && snap.Mode == PpmModes.BeastPerfMode
+                && _ppmWritePending == 0)
             {
                 int lvl = snap.LastPpm.Value;
                 if (lvl != CurrentPpm && !_ppmDebounce.IsEnabled)
@@ -311,6 +323,74 @@ public sealed partial class MainWindow : Window
         finally
         {
             _pollPending = false;
+            if (_refreshQueued && !_disposed)
+            {
+                _refreshQueued = false;
+                _ = RefreshSnapshotAsync();
+            }
+        }
+    }
+
+    // ---------- 主显示器刷新率 ----------
+
+    private void LoadRefreshRates(int? preferredRate = null)
+    {
+        _refreshRateSync = true;
+        RefreshRateCombo.Items.Clear();
+
+        var state = DisplayRefreshRate.GetState();
+        if (state is null)
+        {
+            RefreshRateCombo.IsEnabled = false;
+            RefreshRateCombo.PlaceholderText = "读取失败";
+            _refreshRateSync = false;
+            return;
+        }
+
+        foreach (int rate in state.Value.AvailableRates)
+            RefreshRateCombo.Items.Add(new ComboBoxItem { Content = $"{rate} Hz", Tag = rate });
+
+        int selectedRate = preferredRate ?? state.Value.CurrentRate;
+        RefreshRateCombo.SelectedItem = RefreshRateCombo.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => item.Tag is int rate && rate == selectedRate);
+        RefreshRateCombo.IsEnabled = RefreshRateCombo.Items.Count > 0;
+        _refreshRateSync = false;
+    }
+
+    private async void OnRefreshRateChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_refreshRateSync || _refreshRateBusy ||
+            RefreshRateCombo.SelectedItem is not ComboBoxItem { Tag: int rate })
+            return;
+
+        _refreshRateBusy = true;
+        RefreshRateCombo.IsEnabled = false;
+        SetStatus($"正在切换到 {rate} Hz…");
+        try
+        {
+            var result = await Task.Run(() => DisplayRefreshRate.Set(rate));
+            if (result.Ok)
+            {
+                SetStatus($"刷新率已切换为 {rate} Hz");
+            }
+            else
+            {
+                SetStatus(result.Error);
+            }
+
+            await Task.Delay(300);
+            LoadRefreshRates(result.Ok ? rate : null);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"刷新率切换失败：{ex.Message}");
+            LoadRefreshRates();
+        }
+        finally
+        {
+            _refreshRateBusy = false;
+            RefreshRateCombo.IsEnabled = RefreshRateCombo.Items.Count > 0;
         }
     }
 
@@ -391,6 +471,9 @@ public sealed partial class MainWindow : Window
     {
         int lvl = CurrentPpm;
         HighlightPpm(lvl);
+        // Mark our own write in flight so the PPM mirror in RefreshSnapshotAsync
+        // doesn't mistake the still-stale LastPpm for someone else's change.
+        System.Threading.Interlocked.Increment(ref _ppmWritePending);
         try
         {
             var r = await _client.SetPpmAsync(lvl);
@@ -400,6 +483,13 @@ public sealed partial class MainWindow : Window
         {
             SetStatus($"PPM {lvl} 设置失败：{ex.Message}");
         }
+        finally
+        {
+            System.Threading.Interlocked.Decrement(ref _ppmWritePending);
+        }
+        // Reconcile: with the write now applied, let one snapshot adopt the
+        // authoritative LastPpm (covers trigger races that landed mid-write).
+        await RefreshSnapshotAsync();
     }
 
     private static string LabelForPpm(int lvl)
@@ -522,7 +612,6 @@ public sealed partial class MainWindow : Window
             TouchpadToggle.IsOn = false;
             _touchpadSync = false;
             TouchpadToggle.IsEnabled = false;
-            TouchpadNoteText.Text = "读取失败";
             return;
         }
 
@@ -530,7 +619,6 @@ public sealed partial class MainWindow : Window
         _touchpadSync = true;
         TouchpadToggle.IsOn = state == 1;
         _touchpadSync = false;
-        TouchpadNoteText.Text = state == 1 ? "已开启" : "已关闭";
     }
 
     private async void OnTouchpadToggled(object sender, RoutedEventArgs e)
@@ -559,6 +647,17 @@ public sealed partial class MainWindow : Window
     }
 
     // ---------- lifetime ----------
+
+    /// <summary>
+    /// 托盘唤出窗口时主动拉一次全量状态，免得干等下一轮 3s 轮询。
+    /// 若一轮轮询已在路上（_pollPending），则直接复用它，不重复发请求。
+    /// </summary>
+    public void RefreshNow()
+    {
+        if (_disposed)
+            return;
+        _ = RefreshStateAsync();
+    }
 
     public void Shutdown()
     {
@@ -666,7 +765,10 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnRefresh(object sender, RoutedEventArgs e)
-        => _ = RunBusyAsync(async () => await RefreshStateAsync());
+    {
+        LoadRefreshRates();
+        _ = RunBusyAsync(async () => await RefreshStateAsync());
+    }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {

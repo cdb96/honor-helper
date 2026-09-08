@@ -14,10 +14,12 @@ public static class UiControlMessages
     public const string ShowUiName = "HonorHelperShowUi";
     public const string HideUiName = "HonorHelperHideUi";
     public const string QuitUiName = "HonorHelperQuitUi";
+    public const string StateChangedName = "HonorHelperStateChanged";
 
     public static readonly uint Show = RegisterWindowMessage(ShowUiName);
     public static readonly uint Hide = RegisterWindowMessage(HideUiName);
     public static readonly uint Quit = RegisterWindowMessage(QuitUiName);
+    public static readonly uint StateChanged = RegisterWindowMessage(StateChangedName);
 
     /// <summary>Broadcast a message to all top-level windows on this desktop.</summary>
     public static void Broadcast(uint message)

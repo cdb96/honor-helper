@@ -56,6 +56,7 @@ bool HardwareIsAdmin();
 int HardwareGetPerfMode();  // -1 on failure
 bool HardwareSetPerfMode(int mode);
 bool HardwareSetPpm(int level);
+bool HardwareSetChargeThreshold(int lower, int upper);
 bool HardwareGetTemp(int channel, int& outC);
 bool HardwareGetFan(int id, int& rpmOut, bool& hasLimit, int& limitOut);
 bool HardwareGetTouchpad(int& out);  // out: 1 on / 0 off

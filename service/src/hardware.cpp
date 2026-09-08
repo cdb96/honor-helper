@@ -56,6 +56,10 @@ bool HardwareSetPpm(int level) {
 
 int HardwareLastPpm() { return g_lastPpm.load(std::memory_order_relaxed); }
 
+bool HardwareSetChargeThreshold(int lower, int upper) {
+    return hc_set_charge_threshold(lower, upper) != 0;
+}
+
 bool HardwareGetTemp(int channel, int& outC) {
     int t = hc_get_temp(channel);
     if (t < 0)

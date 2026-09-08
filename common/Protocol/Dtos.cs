@@ -49,6 +49,9 @@ public sealed record ApplyProfileDto(string ProfileId, int? Ppm);
 /// <summary>Apply a GPU clock offset (domain + MHz).</summary>
 public sealed record OcOffsetDto(int ClockDomain, int OffsetMhz);
 
+/// <summary>Battery charge protection lower/upper percentages.</summary>
+public sealed record ChargeThresholdDto(int Lower, int Upper);
+
 /// <summary>Generic success/error result for most commands.</summary>
 public sealed record SimpleResult(bool Ok, string Message);
 

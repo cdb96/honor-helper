@@ -238,23 +238,35 @@
                     </Border>
                 </StackPanel>
 
-                <!-- ===== 触控板（02 0F FF 读 / 02 10 写，状态随温度轮询回读同步） ===== -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <!-- 行高被右侧开关撑高，标题栈必须垂直居中，否则"已开启"相对整行居中会下垂 -->
-                    <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="🖱️ " FontSize="14" />
-                        <TextBlock Text="触控板" Style="{StaticResource SectionTitle}" />
-                        <TextBlock x:Name="TouchpadNoteText" FontSize="11" Foreground="#9A9AA2"
-                                   VerticalAlignment="Center" Margin="10,0,0,0" />
-                    </StackPanel>
-                    <ToggleSwitch x:Name="TouchpadToggle" Grid.Column="1" Toggled="OnTouchpadToggled"
-                                  OnContent="开" OffContent="关" MinWidth="0" Margin="0,0,0,0"
-                                  HorizontalAlignment="Right" IsEnabled="False" />
-                </Grid>
+                <!-- ===== 主显示器刷新率 / 触控板 ===== -->
+                <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                        CornerRadius="8" Padding="12,6">
+                    <Grid ColumnSpacing="10" MinHeight="36">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="🖥️ " FontSize="14" />
+                            <TextBlock Text="刷新率" Style="{StaticResource SectionTitle}" />
+                        </StackPanel>
+                        <ComboBox x:Name="RefreshRateCombo" Grid.Column="1" MinWidth="108"
+                                  VerticalAlignment="Center" SelectionChanged="OnRefreshRateChanged"
+                                  PlaceholderText="读取中…" />
+                        <Border Grid.Column="2" Width="1" Height="22" Background="#E2E2E6"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="🖱️ " FontSize="14" />
+                            <TextBlock Text="触控板" Style="{StaticResource SectionTitle}" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="TouchpadToggle" Grid.Column="4" Toggled="OnTouchpadToggled"
+                                      OnContent="开" OffContent="关" MinWidth="0"
+                                      VerticalAlignment="Center" IsEnabled="False" />
+                    </Grid>
+                </Border>
 
                 <!-- ===== GPU 锁频修复（移植 Enable-DynamicPstates.ps1） ===== -->
                 <StackPanel Spacing="8">

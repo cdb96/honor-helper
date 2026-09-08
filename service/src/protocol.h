@@ -30,6 +30,7 @@ enum class RequestType : int32_t {
     SaveTriggers = 12,
     RunTriggerAction = 13,
     Ping = 14,
+    SetChargeThreshold = 15,
 };
 
 inline const char* kPipeName = "honor-helper.svc";
@@ -208,6 +209,14 @@ inline void FromWireOc(const JsonValue& o, int& domain, int& offset) {
     const JsonValue* m = F(o, "offsetMhz", "OffsetMhz");
     domain = d ? (int)d->asInt(0) : 0;
     offset = m ? (int)m->asInt(0) : 0;
+}
+
+// ChargeThresholdDto{lower, upper}
+inline void FromWireChargeThreshold(const JsonValue& o, int& lower, int& upper) {
+    const JsonValue* lo = F(o, "lower", "Lower");
+    const JsonValue* hi = F(o, "upper", "Upper");
+    lower = lo ? (int)lo->asInt(-1) : -1;
+    upper = hi ? (int)hi->asInt(-1) : -1;
 }
 
 // SettingsDto{tempPollSeconds}

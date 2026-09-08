@@ -44,6 +44,7 @@ public partial class App : Application
         _msgWindow.ShowRequested += ShowMainWindow;
         _msgWindow.HideRequested += HideMainWindow;
         _msgWindow.QuitRequested += ExitApp;
+        _msgWindow.StateChanged += RefreshMainWindow;
 
         // 确保后台服务在运行（若尚未运行则启动它）。UI 本身不需要管理员权限。
         _ = ServiceManager.EnsureServiceAsync();
@@ -59,6 +60,10 @@ public partial class App : Application
         {
             _window.AppWindow.Show();
             _window.Activate();
+            // 托盘唤出时数据可能是几分钟前的旧快照：主动拉一次，
+            // 免得干等下一轮 3s 轮询（冷启动走构造函数里的 RefreshStateAsync）。
+            if (_window is MainWindow mainWindow)
+                mainWindow.RefreshNow();
         }
     }
 
@@ -66,6 +71,12 @@ public partial class App : Application
     {
         // 符合「窗口关闭 = 进程退出」：托盘“隐藏 UI”即关闭窗口，从而结束进程。
         ExitApp();
+    }
+
+    private void RefreshMainWindow()
+    {
+        if (_window is MainWindow mainWindow)
+            mainWindow.RefreshNow();
     }
 
     private void ExitApp()

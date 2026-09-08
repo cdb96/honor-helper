@@ -25,6 +25,8 @@ public sealed class MessageWindow : IDisposable
     public event Action? HideRequested;
     /// <summary>Raised when the service requests the UI process to quit.</summary>
     public event Action? QuitRequested;
+    /// <summary>Raised after a program linkage action changes hardware state.</summary>
+    public event Action? StateChanged;
 
     public MessageWindow()
     {
@@ -52,6 +54,7 @@ public sealed class MessageWindow : IDisposable
         if (msg == UiControlMessages.Show) { ShowRequested?.Invoke(); return IntPtr.Zero; }
         if (msg == UiControlMessages.Hide) { HideRequested?.Invoke(); return IntPtr.Zero; }
         if (msg == UiControlMessages.Quit) { QuitRequested?.Invoke(); return IntPtr.Zero; }
+        if (msg == UiControlMessages.StateChanged) { StateChanged?.Invoke(); return IntPtr.Zero; }
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }
 
@@ -63,6 +66,7 @@ public sealed class MessageWindow : IDisposable
         ShowRequested = null;
         HideRequested = null;
         QuitRequested = null;
+        StateChanged = null;
         if (_hwnd != IntPtr.Zero)
         {
             DestroyWindow(_hwnd);

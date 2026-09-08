@@ -86,6 +86,28 @@
                         </Border>
                     </StackPanel>
 
+                    <!-- 电池充电保护 -->
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <TextBlock Text="🔋 " FontSize="14" />
+                            <TextBlock Text="电池充电保护" Style="{StaticResource SectionTitle}" />
+                        </StackPanel>
+                        <Border Background="White" BorderBrush="#E2E2E6" BorderThickness="1"
+                                CornerRadius="8" Padding="12,10,12,12">
+                            <StackPanel Spacing="10">
+                                <TextBlock FontSize="11" Foreground="#8A8A92" TextWrapping="Wrap"
+                                           Text="电量达到上限时停止充电，降至下限后恢复。请选择一个固定保护档位。" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="长效 40–70" Tag="40,70" Click="OnChargePresetClick" Style="{StaticResource PillButton}" />
+                                    <Button Content="均衡 70–90" Tag="70,90" Click="OnChargePresetClick" Style="{StaticResource PillButton}" />
+                                    <Button Content="满电 95–100" Tag="95,100" Click="OnChargePresetClick" Style="{StaticResource PillButton}" />
+                                </StackPanel>
+                                <TextBlock x:Name="ChargeThresholdStatusText" FontSize="11.5" Foreground="#6A6A72"
+                                           TextWrapping="Wrap" VerticalAlignment="Center" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
                     <!-- 程序联动 -->
                     <StackPanel Spacing="8">
                         <Grid>
