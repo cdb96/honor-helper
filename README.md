@@ -8,7 +8,8 @@
 详见[架构说明](docs/architecture.md)。
 
 ### 界面
-<img width="582" height="811" alt="image" src="https://github.com/user-attachments/assets/b8db23cb-1274-474a-b3bd-3048c4e51383" />
+<img width="582" height="811" alt="image" src="https://github.com/user-attachments/assets/96d26b3e-034c-4701-9791-9c0b30bb2978" />
+
 
 ### 部分功能说明
 GPU锁频修复：修复荣耀电脑管家给特定游戏上pstate和频率锁后忘记在游戏关闭后解锁导致的GPU持续满频问题。（没遇到就不用开）
